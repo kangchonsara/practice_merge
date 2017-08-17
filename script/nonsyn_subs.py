@@ -2,8 +2,9 @@ import sys
 import re
 
 AAs = ['F','L','I','M','V','S','P','T','A','Y','H','Q','N','K','D','E','C','W','R','S','G','?']
+threashold = 0.95 
 
-def get_ancestral_alleles(seqs, threashold):
+def get_ancestral_alleles(seqs, ancestrals_by_season, season):
 
 	#record ancestral allele at each site
 	ancestrals = []
@@ -13,11 +14,19 @@ def get_ancestral_alleles(seqs, threashold):
 		AA_freqs = [0 for i in range(len(AAs))]
 
 		for seq in seqs:
-			print seq
 			AA_freqs[AAs.index(seq[s])] += 1
 		for i in range(len(AA_freqs)):
 			AA_freqs[i] =1.0*AA_freqs[i]/len(seqs)
 
+		#for the first season
+		if season == 0:
+			majority = max(AA_freqs)
+			i = AA_freqs.index(majority)
+			ancestrals.append((AAs[i], AA_freqs[i]))
+			continue
+			
+		#for season > 0
+		
 		#if a frequency of an allele is > threashold, it is an ancestral allele
 		found = 0
 		for i in range(len(AA_freqs)):
@@ -25,9 +34,12 @@ def get_ancestral_alleles(seqs, threashold):
 				ancestrals.append((AAs[i], AA_freqs[i]))
 				found = 1
 				break
-		#when ancestral allele cannot be defined from frequencies, put "-"
+
+		#when ancestral allele cannot be defined from frequencies, put "="
 		if found == 0:
-			ancestrals.append(("-", 0))
+			ances = ancestrals_by_season[season-1][s][0]
+			i = AAs.index(ances)
+			ancestrals.append((ances, AA_freqs[i]))
 
 	return ancestrals
 
@@ -39,21 +51,19 @@ def find_substitutions(seqs_by_season):
 	ancestrals_by_season = []
 
 	for season in range(len(seqs_by_season)):
-		#When frequency of an allele becomes > 0.95 for the first time, this allele becomes an ancestral allele.
-		#For the first season, the majority allele is an ancestral allele.
-		if season == 0:
-			threashold = 0.5
-		else:
-			threashold = 0.95
-		ancestrals_each_site = get_ancestral_alleles(seqs_by_season[season], threashold)
+
+		ancestrals_each_site = get_ancestral_alleles(seqs_by_season[season], ancestrals_by_season, season)
 		ancestrals_by_season.append(ancestrals_each_site)
 
+		if season == 0:
+			continue
+			
 		#Determine substitutions at each site
 		for s in range(len(ancestrals_each_site)):
 			#If ancestral allele is not "-", which means "cannot decide from the frequency but substitution did not occur"),
 			#and is specified as a particular AA different from the last ancestral allele,
 			#it is a substitution.
-			if ancestrals_each_site[s][0] != "-" and ancestrals_each_site[s][0] != ancestrals_by_season[season-1][s][0]:
+			if ancestrals_each_site[s][0] != ancestrals_by_season[season-1][s][0]:
 				subs[season].append((ancestrals_by_season[season-1][s][0], s+1, ancestrals_each_site[s][0]))
 
 	return subs
@@ -69,6 +79,8 @@ def put_seqs_by_season_North(infName, beginS, endS):
 			ymd = each[2].split("/")
 			year = int(ymd[0])
 		else:
+			if line.find("-") >= 0 or line.find("?") >= 0 or line.find("*") >= 0:
+				continue
 			try:
 				month = int(ymd[1])
 			except ValueError:
@@ -101,6 +113,9 @@ def put_seqs_by_year(infName, beginY, endY):
 			ymd = each[2].split("/")
 			year = int(ymd[0])
 		else:
+			if line.find("-") >= 0 or line.find("?") >= 0 or line.find("*") >= 0:
+				continue
+				
 			if year < beginY or year > endY:
 				continue
 
@@ -122,4 +137,8 @@ seqs_by_season_North_2 = put_seqs_by_season_North(dataDir+"gisaid_aligned_1217_A
 
 seqs_by_season = seqs_by_year + seqs_by_season_North_1 + seqs_by_season_North_2
 
-find_substitutions(seqs_by_season)
+subs = find_substitutions(seqs_by_season)
+
+outf = open(resultDir+"substitutions.txt", "w")
+for season in range(len(subs)):
+	print (subs[season])
