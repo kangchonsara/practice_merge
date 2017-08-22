@@ -132,6 +132,49 @@ def read_epitopes(epifName):
 		epi_dict[int(each[0])] = each[1]
 	return epi_dict
 		
+def is_PNGS(substitution, season_idx, ancestrals_by_season):
+	#n-linked glycosylation motif: NXS/T/C
+	site_idx = substitution[1]-1
+	
+	#this season's triplet
+	#first3 = s-2, s-1, s
+	first3_1 = ancestrals_by_season[season_idx][site_idx-2][0]
+	first3_3 = substitution[2]
+	#last3 = s, s+1, s+2
+	last3_1 = substitution[2]
+	last3_3 = ancestrals_by_season[season_idx][site_idx+2][0]
+	
+	#last season's triplet
+	first3_1_prev = ancestrals_by_season[season_idx-1][site_idx-2][0]
+	first3_3_prev = ancestrals_by_season[season_idx-1][site_idx][0]
+	
+	last3_1_prev = ancestrals_by_season[season_idx-1][site_idx][0]
+	last3_3_prev = ancestrals_by_season[season_idx-1][site_idx+2][0]
+	
+	#check if this substitution can cause glycosylation
+	#If this season has glycosylation motif but not in the previous season, return 1 to mark as "glycosylation"
+	if (first3_1 == 'N') and (first3_3 == 'S' or first3_3 == 'T' or first3_3 == 'C'):
+		if not ((first3_1_prev == 'N') and (first3_3_prev == 'S' or first3_3_prev == 'T' or first3_3_prev == 'C')) : 
+			return 1 
+	if (last3_1 == 'N') and (last3_3 == 'S' or last3_3 == 'T' or last3_3 == 'C'):
+		if not ((last3_1_prev == 'N') and (last3_3_prev == 'S' or last3_3_prev == 'T' or last3_3_prev == 'C')) : 
+			return 1
+			
+	#check if this substitution cause loss of glycosylation
+	#If previous season had glycosylation motif but not in this season, return -1 to mark as "loss of glycosylation"
+	if (first3_1_prev == 'N') and (first3_3_prev == 'S' or first3_3_prev == 'T' or first3_3_prev == 'C'):
+		if not ((first3_1 == 'N') and (first3_3 == 'S' or first3_3 == 'T' or first3_3 == 'C')) :
+			return -1
+	if (last3_1_prev == 'N') and (last3_3_prev == 'S' or last3_3_prev == 'T' or last3_3_prev == 'C'):
+		if not ((last3_1 == 'N') and (last3_3 == 'S' or last3_3 == 'T' or last3_3 == 'C')) :
+			return -1
+	
+	#not glycosylation nor loss of glycosylation
+	return 0
+
+	
+	
+
 
 dataDir = sys.argv[1]
 resultDir = sys.argv[2]
@@ -184,7 +227,14 @@ for sdx in range(len(subs)):
 		oneline = "	,"
 		for site in subs_by_sites:
 			try:
-				oneline += site[i][0] + str(site[i][1]) + site[i][2] + ","
+				isGly = is_PNGS(site[i], sdx, ancestrals_by_season)
+				if isGly == 1:
+					gly = '_gly'
+				elif isGly == -1:
+					gly = '_loss'
+				else:
+					gly = ''
+				oneline += site[i][0] + str(site[i][1]) + site[i][2] + gly + ","
 			except IndexError:
 				oneline += ' ,'
 		outf.write(oneline+"\n")
